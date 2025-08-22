@@ -21,10 +21,14 @@ public class BasicMobEffect extends MobEffect {
 	private final Map<Attribute, AttributeModifier> attributeMap;
 	private boolean modified = false;
 	private final ResourceLocation id;
+	private final MobEffectBuilder.EffectChangeCallback removeEffect;
+	private final MobEffectBuilder.EffectChangeCallback addEffect;
 
 	public BasicMobEffect(Builder builder) {
 		super(builder.category, builder.color);
 		this.effectTickCallback = builder.effectTick;
+		this.removeEffect = builder.removeEffect;
+		this.addEffect = builder.addEffect;
 		modifierMap = builder.attributeModifiers;
 		attributeMap = new HashMap<>();
 		this.id = builder.id;
@@ -55,6 +59,9 @@ public class BasicMobEffect extends MobEffect {
 	@Override
 	public void removeAttributeModifiers(LivingEntity livingEntity, AttributeMap attributeMap, int i) {
 		this.applyAttributeModifications();
+		if (removeEffect != null) {
+			removeEffect.applyEffectChange(livingEntity, attributeMap, i);
+		}
 		for (Map.Entry<Attribute, AttributeModifier> entry : this.attributeMap.entrySet()) {
 			AttributeInstance attributeInstance = attributeMap.getInstance(entry.getKey());
 			if (attributeInstance != null) {
@@ -66,6 +73,9 @@ public class BasicMobEffect extends MobEffect {
 	@Override
 	public void addAttributeModifiers(LivingEntity livingEntity, AttributeMap attributeMap, int i) {
 		this.applyAttributeModifications();
+		if (addEffect != null) {
+			addEffect.applyEffectChange(livingEntity, attributeMap, i);
+		}
 		for (Map.Entry<Attribute, AttributeModifier> attributeAttributeModifierEntry : this.attributeMap.entrySet()) {
 			AttributeInstance attributeInstance = attributeMap.getInstance(attributeAttributeModifierEntry.getKey());
 			if (attributeInstance != null) {
