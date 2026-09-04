@@ -14,8 +14,12 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.SlotAccess;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.food.FoodProperties;
+import net.minecraft.world.inventory.ClickAction;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.inventory.tooltip.TooltipComponent;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemUtils;
@@ -34,6 +38,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 @Mixin(value = Item.class, priority = 1001)
@@ -134,6 +139,13 @@ public abstract class ItemMixin implements ItemKJS {
 		}
 	}
 
+	@Inject(method = "canFitInsideContainerItems", at = @At("HEAD"), cancellable = true)
+	private void canFitInsideContainerItems(CallbackInfoReturnable<Boolean> cir) {
+		if (kjs$itemBuilder != null && !kjs$itemBuilder.canFitInsideContainerItems) {
+			cir.setReturnValue(false);
+		}
+	}
+
 	@Inject(method = "appendHoverText", at = @At("RETURN"))
 	private void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flagIn, CallbackInfo ci) {
 		if (kjs$itemBuilder != null && !kjs$itemBuilder.tooltip.isEmpty()) {
@@ -213,6 +225,27 @@ public abstract class ItemMixin implements ItemKJS {
 	private void hurtEnemy(ItemStack itemStack, LivingEntity livingEntity, LivingEntity livingEntity2, CallbackInfoReturnable<Boolean> cir) {
 		if (kjs$itemBuilder != null && kjs$itemBuilder.hurtEnemy != null) {
 			cir.setReturnValue(kjs$itemBuilder.hurtEnemy.test(new ItemBuilder.HurtEnemyContext(itemStack, livingEntity, livingEntity2)));
+		}
+	}
+
+	@Inject(method = "getTooltipImage", at = @At("HEAD"), cancellable = true)
+	private void getTooltipImage(ItemStack itemStack, CallbackInfoReturnable<Optional<TooltipComponent>> cir) {
+		if (kjs$itemBuilder != null && kjs$itemBuilder.tooltipImage != null) {
+			cir.setReturnValue(kjs$itemBuilder.tooltipImage.getTooltipImage(itemStack));
+		}
+	}
+
+	@Inject(method = "overrideStackedOnOther", at = @At("HEAD"), cancellable = true)
+	private void overrideStackedOnOther(ItemStack itemStack, Slot slot, ClickAction clickAction, Player player, CallbackInfoReturnable<Boolean> cir) {
+		if (kjs$itemBuilder != null && kjs$itemBuilder.overrideStackedOnOther != null) {
+			cir.setReturnValue(kjs$itemBuilder.overrideStackedOnOther.overrideStackedOnOther(itemStack, slot, clickAction, player));
+		}
+	}
+
+	@Inject(method = "overrideOtherStackedOnMe", at = @At("HEAD"), cancellable = true)
+	private void overrideOtherStackedOnMe(ItemStack itemStack, ItemStack itemStack2, Slot slot, ClickAction clickAction, Player player, SlotAccess slotAccess, CallbackInfoReturnable<Boolean> cir) {
+		if (kjs$itemBuilder != null && kjs$itemBuilder.overrideOtherStackedOnMe != null) {
+			cir.setReturnValue(kjs$itemBuilder.overrideOtherStackedOnMe.overrideOtherStackedOnMe(itemStack, itemStack2, slot, clickAction, player, slotAccess));
 		}
 	}
 

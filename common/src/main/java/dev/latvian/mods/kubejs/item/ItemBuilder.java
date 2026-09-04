@@ -17,8 +17,12 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.SlotAccess;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.ClickAction;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.inventory.tooltip.TooltipComponent;
 import net.minecraft.world.item.ArmorMaterial;
 import net.minecraft.world.item.ArmorMaterials;
 import net.minecraft.world.item.Item;
@@ -29,6 +33,7 @@ import net.minecraft.world.item.Tier;
 import net.minecraft.world.item.Tiers;
 import net.minecraft.world.item.UseAnim;
 import net.minecraft.world.level.Level;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -36,6 +41,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -97,6 +103,7 @@ public abstract class ItemBuilder extends BuilderBase<Item> {
 	public transient Rarity rarity;
 	public transient boolean fireResistant;
 	public transient boolean glow;
+	public transient boolean canFitInsideContainerItems;
 	public transient final List<Component> tooltip;
 	@Nullable
 	public transient ItemTintFunction tint;
@@ -112,6 +119,9 @@ public abstract class ItemBuilder extends BuilderBase<Item> {
 	public transient FinishUsingCallback finishUsing;
 	public transient ReleaseUsingCallback releaseUsing;
 	public transient Predicate<HurtEnemyContext> hurtEnemy;
+	public transient TooltipImageCallback tooltipImage;
+	public transient OverrideStackedOnOtherCallback overrideStackedOnOther;
+	public transient OverrideOtherStackedOnMeCallback overrideOtherStackedOnMe;
 
 	public String texture;
 	public String parentModel;
@@ -127,6 +137,7 @@ public abstract class ItemBuilder extends BuilderBase<Item> {
 		subtypes = null;
 		rarity = Rarity.COMMON;
 		glow = false;
+		canFitInsideContainerItems = true;
 		tooltip = new ArrayList<>();
 		textureJson = new JsonObject();
 		parentModel = "";
@@ -140,6 +151,9 @@ public abstract class ItemBuilder extends BuilderBase<Item> {
 		releaseUsing = null;
 		fireResistant = false;
 		hurtEnemy = null;
+		tooltipImage = null;
+		overrideStackedOnOther = null;
+		overrideOtherStackedOnMe = null;
 	}
 
 	@Override
@@ -210,7 +224,7 @@ public abstract class ItemBuilder extends BuilderBase<Item> {
 
 	@Info("""
 		Adds subtypes to the item. The function should return a collection of item stacks, each with a different subtype.
-					
+		
 		Each subtype will appear as a separate item in JEI and the creative inventory.
 		""")
 	public ItemBuilder subtypes(Function<ItemStack, Collection<ItemStack>> fn) {
@@ -227,6 +241,12 @@ public abstract class ItemBuilder extends BuilderBase<Item> {
 	@Info("Makes the item glow like enchanted, even if it's not enchanted.")
 	public ItemBuilder glow(boolean v) {
 		glow = v;
+		return this;
+	}
+
+	@Info("Sets whether the item can fit inside container items, e.g. a bucket inside a chest. Default is true.")
+	public ItemBuilder canFitInsideContainerItems(boolean v) {
+		canFitInsideContainerItems = v;
 		return this;
 	}
 
@@ -296,7 +316,7 @@ public abstract class ItemBuilder extends BuilderBase<Item> {
 
 	@Info("""
 		Determines the width of the item's durability bar. Defaulted to vanilla behavior.
-					
+		
 		The function should return a value between 0 and 13 (max width of the bar).
 		""")
 	public ItemBuilder barWidth(ToIntFunction<ItemStack> barWidth) {
@@ -363,7 +383,7 @@ public abstract class ItemBuilder extends BuilderBase<Item> {
 
 	@Info(value = """
 		Adds an attribute modifier to the item.
-					
+		
 		An attribute modifier is something like a damage boost or a speed boost.
 		On tools, they're applied when the item is held, on armor, they're
 		applied when the item is worn.
@@ -387,7 +407,7 @@ public abstract class ItemBuilder extends BuilderBase<Item> {
 
 	@Info("""
 		The duration when the item is used.
-					
+		
 		For example, when eating food, this is the time it takes to eat the food.
 		This can change the eating speed, or be used for other things (like making a custom bow).
 		""")
@@ -398,7 +418,7 @@ public abstract class ItemBuilder extends BuilderBase<Item> {
 
 	@Info("""
 		Determines if player will start using the item.
-					
+		
 		For example, when eating food, returning true will make the player start eating the food.
 		""")
 	public ItemBuilder use(UseCallback use) {
@@ -408,9 +428,9 @@ public abstract class ItemBuilder extends BuilderBase<Item> {
 
 	@Info("""
 		When players finish using the item.
-					
+		
 		This is called only when `useDuration` ticks have passed.
-					
+		
 		For example, when eating food, this is called when the player has finished eating the food, so hunger is restored.
 		""")
 	public ItemBuilder finishUsing(FinishUsingCallback finishUsing) {
@@ -420,13 +440,43 @@ public abstract class ItemBuilder extends BuilderBase<Item> {
 
 	@Info("""
 		When players did not finish using the item but released the right mouse button halfway through.
-					
+		
 		An example is the bow, where the arrow is shot when the player releases the right mouse button.
-					
+		
 		To ensure the bow won't finish using, Minecraft sets the `useDuration` to a very high number (1h).
 		""")
 	public ItemBuilder releaseUsing(ReleaseUsingCallback releaseUsing) {
 		this.releaseUsing = releaseUsing;
+		return this;
+	}
+
+	@Info("""
+		Adds a tooltip image to the item.
+		
+		For example, when using a bow, the arrow has a tooltip image.
+		""")
+	public ItemBuilder tooltipImage(TooltipImageCallback tooltipImage) {
+		this.tooltipImage = tooltipImage;
+		return this;
+	}
+
+	@Info("""
+		Overrides the behavior of the item when it's stacked on other items.
+		
+		For example, when using a bow, the arrow is stacked on the bow.
+		""")
+	public ItemBuilder overrideStackedOnOther(OverrideStackedOnOtherCallback overrideStackedOnOther) {
+		this.overrideStackedOnOther = overrideStackedOnOther;
+		return this;
+	}
+
+	@Info("""
+		Overrides the behavior of the item when it's stacked on other items.
+		
+		For example, when using a bow, the arrow is stacked on the bow.
+		""")
+	public ItemBuilder overrideOtherStackedOnMe(OverrideOtherStackedOnMeCallback overrideOtherStackedOnMe) {
+		this.overrideOtherStackedOnMe = overrideOtherStackedOnMe;
 		return this;
 	}
 
@@ -456,9 +506,25 @@ public abstract class ItemBuilder extends BuilderBase<Item> {
 	}
 
 	@FunctionalInterface
+	public interface TooltipImageCallback {
+		Optional<TooltipComponent> getTooltipImage(ItemStack pStack);
+	}
+
+	@FunctionalInterface
+	public interface OverrideStackedOnOtherCallback {
+		boolean overrideStackedOnOther(ItemStack pStack, Slot pSlot, ClickAction pAction, Player pPlayer);
+	}
+
+	@FunctionalInterface
+	public interface OverrideOtherStackedOnMeCallback {
+		boolean overrideOtherStackedOnMe(ItemStack pStack, ItemStack pOther, Slot pSlot, ClickAction pAction, Player pPlayer, SlotAccess pAccess);
+	}
+
+	@FunctionalInterface
 	public interface NameCallback {
 		Component apply(ItemStack itemStack);
 	}
 
-	public record HurtEnemyContext(ItemStack getItem, LivingEntity getTarget, LivingEntity getAttacker) {}
+	public record HurtEnemyContext(ItemStack getItem, LivingEntity getTarget, LivingEntity getAttacker) {
+	}
 }
